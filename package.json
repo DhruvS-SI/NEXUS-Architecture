@@ -6,7 +6,52 @@
   "scripts": {
     "start": "node nexus-core.js",
     "dev": "nodemon nexus-core.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    
+    "up": "npm run dev",
+    "down": "pkill -f 'node nexus-core.js' || true",
+    "restart": "npm run down && sleep 2 && npm run up",
+    "status": "ps aux | grep 'nexus-core' | grep -v grep || echo 'NEXUS: Offline'",
+    
+    "kill": "lsof -ti:3000 | xargs kill -9 2>/dev/null || true",
+    "killall": "pkill -f node || true",
+    "port": "lsof -i:3000 || echo 'Port 3000: Available'",
+    "ports": "lsof -iTCP -sTCP:LISTEN | grep node || echo 'No Node.js processes'",
+    
+    "clean": "npm cache clean --force",
+    "verify": "npm cache verify",
+    "fresh": "rm -rf node_modules package-lock.json && npm install",
+    "update": "npm update && npm audit fix",
+    "outdated": "npm outdated",
+    "audit": "npm audit",
+    
+    "redis": "redis-cli ping || echo 'Redis: Offline'",
+    "flush": "redis-cli FLUSHALL || echo 'Redis not available'",
+    "monitor": "redis-cli monitor",
+    "rinfo": "redis-cli info | head -20",
+    
+    "logs": "rm -f *.log logs/*.log 2>/dev/null || true",
+    "tail": "tail -f *.log 2>/dev/null || echo 'No logs found'",
+    "errors": "grep -r 'ERROR\\|error\\|Error' . --include='*.log' 2>/dev/null || echo 'No errors'",
+    
+    "info": "echo '🧠 NEXUS Info:' && node -v && npm -v && echo 'Platform:' $(uname -a)",
+    "health": "npm run port && npm run redis && npm run status",
+    "clear": "npm run kill && npm run clean && npm run logs",
+    "reset": "npm run down && npm run clear && npm run fresh && npm run up",
+    
+    "migrate": "echo 'Add DB migration commands here'",
+    "seed": "echo 'Add DB seeding commands here'",
+    "db": "echo 'Add database commands here'",
+    
+    "scan": "npm audit && echo '🔒 Security scan complete'",
+    "fix": "npm audit fix --force",
+    
+    "build": "echo '🚀 Add build commands here'",
+    "deploy": "echo '🚀 Add deployment commands here'",
+    
+    "check": "npm run info && npm run health && npm run outdated",
+    "emergency": "npm run killall && npm run clear && npm run up",
+    "maintain": "npm run down && npm run update && npm run fix && npm run up"
   },
   "keywords": [
     "nexus",
