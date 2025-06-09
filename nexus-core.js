@@ -27,7 +27,10 @@ async function activateNexus() {
     console.log('🧠 Neural network: Fully operational with distributed intelligence');
     
   } catch (error) {
-    nexusCore.log.error('❌ NEXUS activation failed:', error);
+    console.error('❌ NEXUS activation failed:');
+    console.error('Error details:', error.message);
+    console.error('Error stack:', error.stack);
+    nexusCore.log.error('NEXUS activation error:', error);
     process.exit(1);
   }
 }
@@ -43,6 +46,17 @@ process.on('SIGINT', async () => {
     console.log('⚠️ Error during neural shutdown:', error);
     process.exit(1);
   }
+});
+
+// Handle uncaught exceptions
+process.on('uncaughtException', (error) => {
+  console.error('💥 Uncaught exception in NEXUS:', error);
+  process.exit(1);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('💥 Unhandled rejection in NEXUS:', reason);
+  process.exit(1);
 });
 
 // Activate the NEXUS neural network
