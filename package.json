@@ -1,0 +1,31 @@
+{
+  "name": "nexus-backend-architecture",
+  "version": "1.0.0",
+  "description": "NEXUS Architecture - Neural Enterprise eXecution & Unified System. A neural-inspired backend framework with distributed intelligence.",
+  "main": "nexus-core.js",
+  "scripts": {
+    "start": "node nexus-core.js",
+    "dev": "nodemon nexus-core.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "nexus",
+    "neural",
+    "backend", 
+    "architecture",
+    "fastify",
+    "api",
+    "distributed-intelligence",
+    "enterprise"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@fastify/cors": "^8.5.0",
+    "@fastify/formbody": "^7.4.0",
+    "fastify": "^4.29.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.10"
+  }
+}
