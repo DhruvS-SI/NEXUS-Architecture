@@ -1,74 +1,73 @@
 {
   "name": "nexus-backend-architecture",
   "version": "1.0.0",
-  "description": "NEXUS Architecture - Neural Enterprise eXecution & Unified System. A neural-inspired backend framework with distributed intelligence.",
+  "description": "NEXUS Architecture - Neural Enterprise eXecution & Unified System. A neural-inspired backend framework with distributed intelligence and CRM integration.",
   "main": "nexus-core.js",
   "scripts": {
     "start": "node nexus-core.js",
     "dev": "nodemon nexus-core.js",
     "test": "echo \"Error: no test specified\" && exit 1",
-    
     "up": "npm run dev",
     "down": "pkill -f 'node nexus-core.js' || true",
     "restart": "npm run down && sleep 2 && npm run up",
     "status": "ps aux | grep 'nexus-core' | grep -v grep || echo 'NEXUS: Offline'",
-    
     "kill": "lsof -ti:3000 | xargs kill -9 2>/dev/null || true",
     "killall": "pkill -f node || true",
     "port": "lsof -i:3000 || echo 'Port 3000: Available'",
     "ports": "lsof -iTCP -sTCP:LISTEN | grep node || echo 'No Node.js processes'",
-    
     "clean": "npm cache clean --force",
     "verify": "npm cache verify",
     "fresh": "rm -rf node_modules package-lock.json && npm install",
     "update": "npm update && npm audit fix",
     "outdated": "npm outdated",
     "audit": "npm audit",
-    
     "redis": "redis-cli ping || echo 'Redis: Offline'",
     "flush": "redis-cli FLUSHALL || echo 'Redis not available'",
     "monitor": "redis-cli monitor",
     "rinfo": "redis-cli info | head -20",
-    
     "logs": "rm -f *.log logs/*.log 2>/dev/null || true",
     "tail": "tail -f *.log 2>/dev/null || echo 'No logs found'",
     "errors": "grep -r 'ERROR\\|error\\|Error' . --include='*.log' 2>/dev/null || echo 'No errors'",
-    
     "info": "echo '🧠 NEXUS Info:' && node -v && npm -v && echo 'Platform:' $(uname -a)",
     "health": "npm run port && npm run redis && npm run status",
     "clear": "npm run kill && npm run clean && npm run logs",
     "reset": "npm run down && npm run clear && npm run fresh && npm run up",
-    
+    "crm": "curl -s http://localhost:3000/api/crm/health | jq . || curl -s http://localhost:3000/api/crm/health",
+    "crm-leads": "curl -s http://localhost:3000/api/crm/leads | jq . || curl -s http://localhost:3000/api/crm/leads",
+    "crm-contacts": "curl -s http://localhost:3000/api/crm/contacts | jq . || curl -s http://localhost:3000/api/crm/contacts",
+    "crm-test": "npm run crm && echo '\n---' && npm run crm-leads",
     "migrate": "echo 'Add DB migration commands here'",
     "seed": "echo 'Add DB seeding commands here'",
     "db": "echo 'Add database commands here'",
-    
     "scan": "npm audit && echo '🔒 Security scan complete'",
     "fix": "npm audit fix --force",
-    
     "build": "echo '🚀 Add build commands here'",
     "deploy": "echo '🚀 Add deployment commands here'",
-    
-    "check": "npm run info && npm run health && npm run outdated",
+    "check": "npm run info && npm run health && npm run outdated && npm run crm",
     "emergency": "npm run killall && npm run clear && npm run up",
     "maintain": "npm run down && npm run update && npm run fix && npm run up"
   },
   "keywords": [
     "nexus",
     "neural",
-    "backend", 
+    "backend",
     "architecture",
     "fastify",
     "api",
     "distributed-intelligence",
-    "enterprise"
+    "enterprise",
+    "crm",
+    "zoho"
   ],
   "author": "",
   "license": "ISC",
   "dependencies": {
     "@fastify/cors": "^8.5.0",
     "@fastify/formbody": "^7.4.0",
-    "fastify": "^4.29.1"
+    "@zohocrm/nodejs-sdk-2.0": "^6.1.0",
+    "dotenv": "^16.5.0",
+    "fastify": "^4.29.1",
+    "node-fetch": "^2.7.0"
   },
   "devDependencies": {
     "nodemon": "^3.1.10"

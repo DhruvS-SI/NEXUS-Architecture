@@ -1,37 +1,6 @@
-// NEXUS Neural Pathways - Main routing hub
-const blogPathways = require('./blogPathways');
-const formPathways = require('./formPathways');
+// NEXUS Neural Pathways - System utilities and health monitoring
 
 async function pathways(nexusCore, options) {
-  // Register specialized neural pathways
-  await nexusCore.register(blogPathways);    // Blog processing pathways
-  await nexusCore.register(formPathways);    // Form processing pathways
-  
-  // Core system pathways
-  nexusCore.get('/', async (request, reply) => {
-    return {
-      success: true,
-      message: '🧠 Welcome to NEXUS Architecture - Neural Backend Framework',
-      system: 'NEXUS Core',
-      status: 'Fully operational',
-      neural_pathways: {
-        blogs: 'GET /api/blogs - Access memory banks for blog data',
-        blog_by_id: 'GET /api/blogs/:id - Retrieve specific neural records',
-        forms: 'POST /api/forms - Process incoming data through neural validation',
-        health: 'GET /health - Neural network status check'
-      },
-      architecture: {
-        core: 'nexus-core.js - Central processing hub',
-        synapses: 'synapses/ - Neural connection configurations', 
-        processors: 'processors/ - Specialized logic processing units',
-        memory_banks: 'memory-banks/ - Data storage matrices',
-        pathways: 'pathways/ - Neural routing network',
-        toolkit: 'toolkit/ - Algorithm processing tools',
-        interceptors: 'interceptors/ - Data security barriers'
-      }
-    };
-  });
-
   // Neural network health diagnostics
   nexusCore.get('/health', async (request, reply) => {
     return {
@@ -43,7 +12,32 @@ async function pathways(nexusCore, options) {
       memory_usage: process.memoryUsage(),
       neural_activity: 'All processors responding normally',
       pathways_active: true,
-      synaptic_connections: 'Stable'
+      synaptic_connections: 'Stable',
+      crm_integration: 'Zoho CRM neural pathways active',
+      active_endpoints: {
+        content_apis: {
+          blogs: 'GET /api/blogs',
+          blog_single: 'GET /api/blogs/:slug',
+          case_studies: 'GET /api/case-studies',
+          case_study_single: 'GET /api/case-studies/:slug',
+          media: 'GET /api/media'
+        },
+        form_apis: {
+          contact: 'POST /api/contact',
+          ebook: 'POST /api/ebook',
+          careers: 'POST /api/careers',
+          newsletter: 'POST /api/newsletter'
+        },
+        crm_integration: {
+          zoho_callback: 'GET /zoho/callback',
+          zoho_test: 'GET /zoho/test'
+        },
+        system: {
+          health: 'GET /health',
+          docs: 'GET /api/docs',
+          status: 'GET /api/status'
+        }
+      }
     };
   });
 }

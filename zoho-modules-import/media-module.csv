@@ -1,0 +1,12 @@
+Field Label,Data Type,Length,Required,Unique,Pick List Values,Description
+Media Title,Single Line,200,Yes,No,,Title of the media item
+Media Type,Pick List,,No,No,"Video;Image;Image Gallery;Document;Audio",Type of media content
+Media URL,URL,450,No,No,,URL of the media file
+Thumbnail URL,URL,450,No,No,,URL of the thumbnail image
+Description,Multi Line,1000,No,No,,Description of the media content
+Duration Seconds,Number,6,No,No,,Duration in seconds for video/audio
+Category,Pick List,,No,No,"Educational;Webinar;Product Demo;Tutorial;Marketing",Media category
+Tags,Multi Select,,No,No,"Architecture;Tutorial;Backend;API;Integration;Demo;Screenshots",Media tags
+Uploaded Date,Date/Time,,No,No,,Upload date and time
+File Size,Single Line,20,No,No,,File size information
+Gallery Images,Multi Line,2000,No,No,,JSON array of gallery image URLs 

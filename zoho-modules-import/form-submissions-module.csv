@@ -1,0 +1,19 @@
+Field Label,Data Type,Length,Required,Unique,Pick List Values,Description
+Form Type,Pick List,,Yes,No,"Contact;eBook;Career;Newsletter",Type of form submission
+Name,Single Line,100,No,No,,Submitter's name
+Email,Email,100,No,No,,Submitter's email address
+Phone,Phone,30,No,No,,Submitter's phone number
+Company,Single Line,100,No,No,,Submitter's company
+Message,Multi Line,2000,No,No,,Contact message
+Position Applied,Single Line,100,No,No,,Job position applied for
+Experience,Single Line,50,No,No,,Years of experience
+Skills,Multi Line,500,No,No,,Skills and competencies
+Cover Letter,Multi Line,2000,No,No,,Cover letter text
+eBook Title,Single Line,200,No,No,,Requested eBook title
+Job Title,Single Line,100,No,No,,Current job title
+Interests,Multi Select,,No,No,"Technology;API Development;Backend Development;Integration;Security",Areas of interest
+Submission Source,Single Line,100,No,No,,Source of the submission
+Status,Pick List,,No,No,"New;In Progress;Completed;Closed",Processing status
+Submission Date,Date/Time,,No,No,,Date and time of submission
+IP Address,Single Line,45,No,No,,IP address of submitter
+reCAPTCHA Verified,Boolean,,No,No,,reCAPTCHA verification status 

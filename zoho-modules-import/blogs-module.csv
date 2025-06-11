@@ -1,0 +1,13 @@
+Field Label,Data Type,Length,Required,Unique,Pick List Values,Description
+Blog Title,Single Line,200,Yes,Yes,,Main title of the blog post
+Blog Slug,Single Line,200,Yes,Yes,,URL-friendly version of the title
+Excerpt,Multi Line,500,No,No,,Short summary of the blog post
+Content,Multi Line,50000,No,No,,Full blog post content
+Author,Single Line,100,No,No,,Author name
+Published Date,Date/Time,,No,No,,Publication date and time
+Category,Pick List,,No,No,"Technology;Integration;Security;Business;Tutorials",Blog category
+Tags,Multi Select,,No,No,"API;Backend;Node.js;Zoho;CRM;OAuth;Security;Integration",Blog tags
+Featured Image URL,URL,450,No,No,,URL of the featured image
+Status,Pick List,,No,No,"Draft;Published;Archived",Publication status
+Read Time Minutes,Number,3,No,No,,Estimated reading time
+Meta Description,Multi Line,160,No,No,,SEO meta description 
