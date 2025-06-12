@@ -7,9 +7,13 @@ const crmPathways = require('./pathways/crmPathways');
 const systemPathways = require('./pathways/index');
 const { registerApiPathways } = require('./pathways/apiPathways');
 const { activateNeuralCRM } = require('./synapses/zoho');
+const AWSS3Service = require('./services/awsS3Service');
 
 // Create the NEXUS core - Central neural processing hub
 const nexusCore = fastify({ logger: config.fastify.logger });
+
+// Initialize AWS S3 service
+const s3Service = new AWSS3Service();
 
 // Initialize neural network startup
 async function activateNexus() {
@@ -33,6 +37,27 @@ async function activateNexus() {
   await nexusCore.register(require('@fastify/cookie'), {
     secret: process.env.COOKIE_SECRET || 'nexus-cookie-secret-key-change-in-production',
     parseOptions: {}
+  });
+  
+  // File upload middleware
+  await nexusCore.register(require('@fastify/multipart'), {
+    limits: {
+      fileSize: 50 * 1024 * 1024, // 50MB limit
+      files: 1 // Single file upload
+    }
+  });
+  
+  // Static file serving for uploads
+  await nexusCore.register(require('@fastify/static'), {
+    root: require('path').join(__dirname, 'uploads'),
+    prefix: '/uploads/'
+  });
+  
+  // Static file serving for public assets
+  await nexusCore.register(require('@fastify/static'), {
+    root: require('path').join(__dirname, 'public'),
+    prefix: '/public/',
+    decorateReply: false
   });
   
   // Welcome route - Show all available endpoints

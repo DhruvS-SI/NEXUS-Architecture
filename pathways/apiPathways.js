@@ -1144,123 +1144,516 @@ const submitEbookForm = async (formData) => {
         });
     });
 
-    // 🗑️ Cache Management Endpoints - DISABLED FOR NOW
-    /*
-    // Clear all caches
-    nexusCore.post('/api/cache/clear', async (request, reply) => {
+    // 🖼️ IMAGE UPLOAD API - Enhanced with AWS S3 Support
+    nexusCore.post('/api/image/upload', async (request, reply) => {
         try {
-            const result = cacheBuster.clearAllCaches();
+            const data = await request.file();
             
-            return reply.status(200).send({
-                status: 200,
-                success: true,
-                message: 'All caches cleared successfully',
-                data: result,
-                timestamp: new Date().toISOString()
-            });
-        } catch (error) {
-            console.error('❌ Cache clear API error:', error);
-            return reply.status(500).send({
-                status: 500,
-                success: false,
-                error: 'Failed to clear caches',
-                details: error.message,
-                timestamp: new Date().toISOString()
-            });
-        }
-    });
-
-    // Clear specific cache type
-    nexusCore.post('/api/cache/clear/:type', async (request, reply) => {
-        try {
-            const { type } = request.params;
-            let result;
-
-            switch (type) {
-                case 'require':
-                    result = cacheBuster.clearRequireCache();
-                    break;
-                case 'application':
-                    result = cacheBuster.clearApplicationCache();
-                    break;
-                case 'tokens':
-                    result = cacheBuster.clearTokenCache();
-                    break;
-                default:
-                    return reply.status(400).send({
-                        status: 400,
-                        success: false,
-                        error: 'Invalid cache type',
-                        validTypes: ['require', 'application', 'tokens'],
-                        timestamp: new Date().toISOString()
-                    });
+            if (!data) {
+                return reply.status(400).send({
+                    status: 400,
+                    success: false,
+                    error: 'No file uploaded',
+                    message: 'Please select an image file to upload',
+                    timestamp: new Date().toISOString()
+                });
             }
 
+            // Validate file type
+            const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+            if (!allowedTypes.includes(data.mimetype)) {
+                return reply.status(400).send({
+                    status: 400,
+                    success: false,
+                    error: 'Invalid file type',
+                    message: 'Only JPEG, PNG, GIF, and WebP images are allowed',
+                    allowedTypes: allowedTypes,
+                    receivedType: data.mimetype,
+                    timestamp: new Date().toISOString()
+                });
+            }
+
+            // Generate unique filename
+            const fileExtension = data.filename.split('.').pop();
+            const uniqueFilename = `${Date.now()}-${Math.random().toString(36).substring(2)}.${fileExtension}`;
+            
+            // Convert stream to buffer for S3 upload
+            const chunks = [];
+            for await (const chunk of data.file) {
+                chunks.push(chunk);
+            }
+            const fileBuffer = Buffer.concat(chunks);
+            
+            let uploadResult = {
+                filename: uniqueFilename,
+                originalName: data.filename,
+                size: fileBuffer.length,
+                mimetype: data.mimetype,
+                storage: 'local', // Default to local
+                url: null,
+                localPath: null,
+                s3Data: null
+            };
+
+            // Try AWS S3 upload first (if configured)
+            const AWSS3Service = require('../services/awsS3Service');
+            const s3Service = new AWSS3Service();
+            
+            if (s3Service.isAvailable()) {
+                try {
+                    console.log('🌩️ Attempting S3 upload...');
+                    const s3Result = await s3Service.uploadToS3(fileBuffer, uniqueFilename, data.mimetype);
+                    
+                    if (s3Result.success) {
+                        uploadResult.storage = 's3';
+                        uploadResult.url = s3Result.url;
+                        uploadResult.s3Data = {
+                            bucket: s3Result.bucket,
+                            key: s3Result.key,
+                            etag: s3Result.etag
+                        };
+                        console.log('✅ S3 upload successful:', s3Result.url);
+                    }
+                } catch (s3Error) {
+                    console.log('⚠️ S3 upload failed, falling back to local storage:', s3Error.message);
+                }
+            }
+
+            // Fallback to local storage if S3 failed or not configured
+            if (!uploadResult.url) {
+                const filePath = `uploads/blogs/${uniqueFilename}`;
+                
+                // Save file to local storage
+                const fs = require('fs');
+                const path = require('path');
+                
+                // Ensure directory exists
+                const uploadDir = path.dirname(filePath);
+                if (!fs.existsSync(uploadDir)) {
+                    fs.mkdirSync(uploadDir, { recursive: true });
+                }
+                
+                // Write file from buffer
+                fs.writeFileSync(filePath, fileBuffer);
+                
+                // Generate accessible URL
+                uploadResult.url = `${request.protocol}://${request.headers.host}/uploads/blogs/${uniqueFilename}`;
+                uploadResult.localPath = filePath;
+                uploadResult.storage = 'local';
+                console.log('✅ Local upload successful:', uploadResult.url);
+            }
+            
             return reply.status(200).send({
                 status: 200,
                 success: true,
-                message: `${type} cache cleared successfully`,
-                data: result,
+                message: `Image uploaded successfully to ${uploadResult.storage.toUpperCase()}`,
+                data: uploadResult,
                 timestamp: new Date().toISOString()
             });
+
         } catch (error) {
-            console.error(`❌ ${request.params.type} cache clear error:`, error);
+            console.error('❌ Image upload error:', error);
             return reply.status(500).send({
                 status: 500,
                 success: false,
-                error: `Failed to clear ${request.params.type} cache`,
+                error: 'Upload failed',
+                message: 'Failed to upload image',
                 details: error.message,
                 timestamp: new Date().toISOString()
             });
         }
     });
 
-    // Get cache statistics
-    nexusCore.get('/api/cache/stats', async (request, reply) => {
-        try {
-            const stats = cacheBuster.getStats();
+    // 📄 EMBEDDED UPLOAD FORM - For Zoho CRM Integration
+    nexusCore.get('/upload', async (request, reply) => {
+        const embeddedUploadForm = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>NEXUS Image Upload - Zoho CRM Integration</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        .container { 
+            max-width: 500px; 
+            margin: 0 auto; 
+            backgroundColor: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            overflow: hidden;
+        }
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 25px;
+            text-align: center;
+        }
+        .header h1 { font-size: 24px; margin-bottom: 5px; }
+        .header p { opacity: 0.9; font-size: 14px; }
+        
+        .upload-section { padding: 30px; }
+        
+        .upload-area { 
+            border: 3px dashed #ddd; 
+            border-radius: 12px; 
+            padding: 40px 20px; 
+            text-align: center; 
+            margin: 20px 0;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            background: #fafafa;
+        }
+        .upload-area:hover, .upload-area.dragover { 
+            border-color: #667eea; 
+            background: #f0f4ff;
+            transform: translateY(-2px);
+        }
+        .upload-area.dragover { 
+            border-color: #667eea; 
+            background: #e3f2fd; 
+            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.15);
+        }
+        
+        .upload-icon { font-size: 48px; margin-bottom: 15px; color: #667eea; }
+        .upload-text { font-size: 18px; font-weight: 600; color: #333; margin-bottom: 8px; }
+        .upload-subtext { font-size: 14px; color: #666; }
+        
+        input[type="file"] { display: none; }
+        
+        .btn { 
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white; 
+            padding: 12px 30px; 
+            border: none; 
+            border-radius: 25px; 
+            cursor: pointer; 
+            font-size: 16px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            width: 100%;
+            margin: 20px 0;
+        }
+        .btn:hover { 
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.3);
+        }
+        .btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+        
+        .result { 
+            margin: 20px 0; 
+            padding: 20px; 
+            border-radius: 12px; 
+            display: none;
+        }
+        .success { 
+            background: linear-gradient(135deg, #4CAF50, #45a049);
+            color: white;
+        }
+        .error { 
+            background: linear-gradient(135deg, #f44336, #e53935);
+            color: white;
+        }
+        .loading {
+            background: linear-gradient(135deg, #ff9800, #f57c00);
+            color: white;
+        }
+        
+        .uploaded-image { 
+            max-width: 100%; 
+            margin: 15px 0; 
+            border-radius: 10px; 
+            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+        }
+        
+        .url-section {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+        }
+        .url-input {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+            font-family: monospace;
+            background: white;
+        }
+        .copy-btn {
+            background: #28a745;
+            color: white;
+            padding: 8px 15px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 12px;
+            margin-top: 10px;
+            width: 100%;
+        }
+        .copy-btn:hover { background: #218838; }
+        
+        .zoho-integration {
+            background: #e8f4f8;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+            border-left: 4px solid #667eea;
+        }
+        .zoho-integration h4 { color: #333; margin-bottom: 10px; }
+        .zoho-integration p { color: #666; font-size: 14px; line-height: 1.4; }
+        
+        .close-btn {
+            background: #6c757d;
+            color: white;
+            padding: 8px 20px;
+            border: none;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 14px;
+            margin-top: 15px;
+        }
+        .close-btn:hover { background: #5a6268; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🖼️ NEXUS Image Upload</h1>
+            <p>Zoho CRM Blog Integration</p>
+        </div>
+        
+        <div class="upload-section">
+            <div class="upload-area" onclick="document.getElementById('fileInput').click()">
+                <div class="upload-icon">📁</div>
+                <div class="upload-text">Click here or drag & drop</div>
+                <div class="upload-subtext">JPEG, PNG, GIF, WebP supported (Max: 50MB)</div>
+            </div>
+
+            <input type="file" id="fileInput" accept="image/*" />
+            <button class="btn" onclick="uploadImage()" id="uploadBtn">🚀 Upload Image</button>
+
+            <div id="result" class="result"></div>
             
-            return reply.status(200).send({
-                status: 200,
-                success: true,
-                message: 'Cache statistics retrieved successfully',
-                data: stats,
-                timestamp: new Date().toISOString()
-            });
-        } catch (error) {
-            console.error('❌ Cache stats API error:', error);
-            return reply.status(500).send({
-                status: 500,
-                success: false,
-                error: 'Failed to retrieve cache statistics',
-                timestamp: new Date().toISOString()
+            <div class="zoho-integration">
+                <h4>📋 Zoho CRM Integration</h4>
+                <p>After successful upload, copy the generated URL and paste it into your Blog record's image field in Zoho CRM.</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const uploadArea = document.querySelector('.upload-area');
+        const fileInput = document.getElementById('fileInput');
+        const result = document.getElementById('result');
+        const uploadBtn = document.getElementById('uploadBtn');
+
+        // Drag & Drop functionality
+        uploadArea.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            uploadArea.classList.add('dragover');
+        });
+
+        uploadArea.addEventListener('dragleave', () => {
+            uploadArea.classList.remove('dragover');
+        });
+
+        uploadArea.addEventListener('drop', (e) => {
+            e.preventDefault();
+            uploadArea.classList.remove('dragover');
+            const files = e.dataTransfer.files;
+            if (files.length > 0) {
+                fileInput.files = files;
+                updateFileInfo(files[0]);
+            }
+        });
+
+        fileInput.addEventListener('change', () => {
+            if (fileInput.files[0]) {
+                updateFileInfo(fileInput.files[0]);
+            }
+        });
+
+        function updateFileInfo(file) {
+            const uploadText = document.querySelector('.upload-text');
+            const uploadSubtext = document.querySelector('.upload-subtext');
+            
+            uploadText.textContent = file.name;
+            uploadSubtext.textContent = \`Size: \${(file.size / 1024 / 1024).toFixed(2)} MB\`;
+            uploadArea.style.borderColor = '#667eea';
+            uploadArea.style.background = '#f0f4ff';
+        }
+
+        async function uploadImage() {
+            const file = fileInput.files[0];
+            if (!file) {
+                showResult('error', '❌ Please select an image file');
+                return;
+            }
+
+            // Validate file size
+            if (file.size > 50 * 1024 * 1024) {
+                showResult('error', '❌ File too large. Maximum size is 50MB.');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            // Show loading state
+            uploadBtn.disabled = true;
+            uploadBtn.textContent = '⏳ Uploading...';
+            showResult('loading', '⏳ Uploading your image...');
+
+            try {
+                const response = await fetch('/api/image/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    showSuccessResult(data.data);
+                } else {
+                    showResult('error', \`❌ \${data.error}: \${data.message}\`);
+                }
+            } catch (error) {
+                showResult('error', \`❌ Upload failed: \${error.message}\`);
+            } finally {
+                uploadBtn.disabled = false;
+                uploadBtn.textContent = '🚀 Upload Image';
+            }
+        }
+
+        function showResult(type, message) {
+            result.className = \`result \${type}\`;
+            result.style.display = 'block';
+            result.innerHTML = message;
+        }
+
+        function showSuccessResult(data) {
+            const storageInfo = data.storage === 's3' ? 
+                '<div style="color: #28a745; font-weight: 600; margin-bottom: 10px;">🌩️ Uploaded to AWS S3</div>' :
+                '<div style="color: #667eea; font-weight: 600; margin-bottom: 10px;">💾 Uploaded to Local Storage</div>';
+                
+            const successHTML = \`
+                <div style="text-align: center;">
+                    <h3 style="margin-bottom: 15px;">✅ Upload Successful!</h3>
+                    \${storageInfo}
+                    <img src="\${data.url}" alt="Uploaded image" class="uploaded-image" />
+                    
+                    <div class="url-section">
+                        <label style="display: block; margin-bottom: 8px; font-weight: 600;">📋 Copy this URL for Zoho CRM:</label>
+                        <input type="text" class="url-input" value="\${data.url}" id="imageUrl" readonly />
+                        <button class="copy-btn" onclick="copyToClipboard()">📋 Copy URL</button>
+                    </div>
+                    
+                    <div style="margin-top: 15px; padding: 10px; background: rgba(255,255,255,0.2); border-radius: 6px; font-size: 14px;">
+                        <strong>File:</strong> \${data.filename}<br>
+                        <strong>Size:</strong> \${(data.size / 1024).toFixed(2)} KB<br>
+                        <strong>Type:</strong> \${data.mimetype}<br>
+                        <strong>Storage:</strong> \${data.storage.toUpperCase()}\${data.s3Data ? \` (Bucket: \${data.s3Data.bucket})\` : ''}
+                    </div>
+                    
+                    <button class="close-btn" onclick="closeWindow()">Close Window</button>
+                </div>
+            \`;
+            
+            result.className = 'result success';
+            result.style.display = 'block';
+            result.innerHTML = successHTML;
+        }
+
+        function copyToClipboard() {
+            const urlInput = document.getElementById('imageUrl');
+            urlInput.select();
+            urlInput.setSelectionRange(0, 99999); // For mobile devices
+            
+            navigator.clipboard.writeText(urlInput.value).then(() => {
+                const copyBtn = document.querySelector('.copy-btn');
+                const originalText = copyBtn.textContent;
+                copyBtn.textContent = '✅ Copied!';
+                copyBtn.style.background = '#28a745';
+                
+                setTimeout(() => {
+                    copyBtn.textContent = originalText;
+                    copyBtn.style.background = '#28a745';
+                }, 2000);
+            }).catch(() => {
+                // Fallback for older browsers
+                document.execCommand('copy');
+                alert('URL copied to clipboard!');
             });
         }
+
+        function closeWindow() {
+            // Try to close the window/tab (works if opened by script)
+            if (window.opener) {
+                window.close();
+            } else {
+                // If can't close, show message
+                alert('Please close this tab and return to Zoho CRM');
+            }
+        }
+
+        // Auto-focus on file input when page loads
+        window.addEventListener('load', () => {
+            // Auto-highlight the upload area
+            setTimeout(() => {
+                uploadArea.style.animation = 'pulse 2s ease-in-out';
+            }, 500);
+        });
+    </script>
+</body>
+</html>`;
+
+        return reply.type('text/html').send(embeddedUploadForm);
     });
 
-    // Analyze cache state
-    nexusCore.get('/api/cache/analyze', async (request, reply) => {
+    // 🌩️ AWS S3 HEALTH CHECK ENDPOINT
+    nexusCore.get('/api/s3/health', async (request, reply) => {
         try {
-            const analysis = cacheBuster.analyzeCacheState();
+            const AWSS3Service = require('../services/awsS3Service');
+            const s3Service = new AWSS3Service();
+            
+            const healthCheck = await s3Service.healthCheck();
             
             return reply.status(200).send({
                 status: 200,
                 success: true,
-                message: 'Cache analysis completed successfully',
-                data: analysis,
+                message: 'S3 health check completed',
+                data: {
+                    s3Status: healthCheck,
+                    isConfigured: s3Service.isAvailable(),
+                    region: process.env.AWS_REGION || 'ap-south-1',
+                    bucket: process.env.AWS_S3_BUCKET || 'assets-spz.sportz.io'
+                },
                 timestamp: new Date().toISOString()
             });
         } catch (error) {
-            console.error('❌ Cache analysis API error:', error);
+            console.error('❌ S3 health check error:', error);
             return reply.status(500).send({
                 status: 500,
                 success: false,
-                error: 'Failed to analyze cache state',
+                error: 'S3 health check failed',
+                message: error.message,
                 timestamp: new Date().toISOString()
             });
         }
     });
-    */
 
     console.log('🔗 API pathways activated with Zoho CRM integration');
 }

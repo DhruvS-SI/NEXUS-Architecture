@@ -136,7 +136,7 @@ class ZohoDataProcessor {
             const queryParams = [];
 
             // Add required fields parameter - Updated to include the actual field name from user's Zoho setup
-            queryParams.push('fields=Blog_Title,Blog_Slug,Content,Author,Excerpt,Published_Date,Category,Category_Type,Tags,featuredImage,Read_Time_Minutes,Meta_Description,Status');
+            queryParams.push('fields=Blog_Title,Blog_Slug,Content,Author,Excerpt,Published_Date,Category,Category_Type,Tags,featuredImage,BlogImageUrl,Read_Time_Minutes,Meta_Description,Status');
 
             // Add pagination
             if (filters.page && filters.limit) {
@@ -186,7 +186,7 @@ class ZohoDataProcessor {
         try {
             // FIXED: Get all blogs and filter client-side instead of relying on Zoho criteria search
             // The Zoho criteria search is unreliable and returns wrong results
-            const endpoint = `/${this.modules.blogs}?fields=Blog_Title,Blog_Slug,Content,Author,Excerpt,Published_Date,Category,Category_Type,Tags,featuredImage,Read_Time_Minutes,Meta_Description,Status&per_page=${this.maxBlogsPerPage}`;
+            const endpoint = `/${this.modules.blogs}?fields=Blog_Title,Blog_Slug,Content,Author,Excerpt,Published_Date,Category,Category_Type,Tags,featuredImage,BlogImageUrl,Read_Time_Minutes,Meta_Description,Status&per_page=${this.maxBlogsPerPage}`;
             
             const response = await this.makeZohoRequest(endpoint);
             
@@ -458,9 +458,13 @@ class ZohoDataProcessor {
 
     // 🔄 Data Transformation Methods
     transformBlogData(rawBlog) {
-        // Simple image handling using the new featuredImage field
-        const processedImageUrl = this.processImageUrl(rawBlog.featuredImage);
-        const hasImage = !!processedImageUrl;
+        // Enhanced image handling for both Zoho and NEXUS uploads
+        const featuredImageUrl = this.processImageUrl(rawBlog.featuredImage);
+        const uploadedImageUrl = this.processImageUrl(rawBlog.BlogImageUrl);
+        
+        // Determine which image to use as primary (NEXUS upload takes precedence)
+        const primaryImageUrl = uploadedImageUrl || featuredImageUrl;
+        const hasImage = !!primaryImageUrl;
 
         const transformed = {
             id: rawBlog.id,
@@ -473,11 +477,20 @@ class ZohoDataProcessor {
             category: rawBlog.Category,
             categoryType: rawBlog.Category_Type, // New picklist field
             tags: rawBlog.Tags ? rawBlog.Tags.split(',').map(tag => tag.trim()) : [],
-            featuredImage: processedImageUrl,
+            
+            // Enhanced image fields
+            featuredImage: primaryImageUrl,                    // Primary image (NEXUS upload or Zoho)
+            zohoFeaturedImage: featuredImageUrl,              // Original Zoho featured image
+            uploadedImage: uploadedImageUrl,                  // NEXUS uploaded image
+            imageSource: uploadedImageUrl ? 'admin' : (featuredImageUrl ? 'zoho' : null),
+            
             readTime: rawBlog.Read_Time_Minutes || 5,
             metaDescription: rawBlog.Meta_Description,
+            
             // Additional image-related fields
             hasImage: hasImage,
+            hasUploadedImage: !!uploadedImageUrl,
+            hasZohoImage: !!featuredImageUrl,
             imageAlt: rawBlog.Blog_Title || 'Blog image', // Use title as alt text fallback
             status: rawBlog.Status || 'draft'
         };
@@ -502,8 +515,8 @@ class ZohoDataProcessor {
                 } else if (firstImage && (firstImage.File_Name__s || firstImage.File_Id__s || firstImage.Preview_Id__s || firstImage.file_name || firstImage.download_url || firstImage.url)) {
                     // Zoho-specific field names or generic field names
                     if (firstImage.File_Id__s) {
-                        // Construct Zoho download URL using File_Id__s
-                        imageUrl = `https://www.zohoapis.in/crm/v8/files/${firstImage.File_Id__s}/content`;
+                        // Skip Zoho internal file URLs - user doesn't want these
+                        return null;
                     } else {
                         imageUrl = firstImage.File_Name__s || firstImage.File_Id__s || firstImage.Preview_Id__s || firstImage.file_name || firstImage.download_url || firstImage.url;
                     }
@@ -513,8 +526,8 @@ class ZohoDataProcessor {
             } else if (imageUrl.File_Name__s || imageUrl.File_Id__s || imageUrl.Preview_Id__s || imageUrl.file_name || imageUrl.download_url || imageUrl.url) {
                 // Single image object (Zoho or generic format)
                 if (imageUrl.File_Id__s) {
-                    // Construct Zoho download URL using File_Id__s
-                    imageUrl = `https://www.zohoapis.in/crm/v8/files/${imageUrl.File_Id__s}/content`;
+                    // Skip Zoho internal file URLs - user doesn't want these
+                    return null;
                 } else {
                     imageUrl = imageUrl.File_Name__s || imageUrl.File_Id__s || imageUrl.Preview_Id__s || imageUrl.file_name || imageUrl.download_url || imageUrl.url;
                 }
@@ -530,6 +543,11 @@ class ZohoDataProcessor {
 
         // Clean up the URL
         const cleanUrl = imageUrl.trim();
+        
+        // 🚫 Filter out Zoho internal file URLs that user doesn't want
+        if (cleanUrl.includes('zohoapis.in/crm/v8/files/') && cleanUrl.includes('/content')) {
+            return null;
+        }
         
         // Validate URL format (allow both URLs and filenames)
         if (!this.isValidImageUrl(cleanUrl)) {
@@ -560,13 +578,10 @@ class ZohoDataProcessor {
             new URL(url);
             
             // Check if it's an image file or common image hosting patterns
-            const isImageHost = lowercaseUrl.includes('imgur.com') || 
-                               lowercaseUrl.includes('cloudinary.com') ||
-                               lowercaseUrl.includes('unsplash.com') ||
-                               lowercaseUrl.includes('pixabay.com') ||
-                               lowercaseUrl.includes('zoho.') ||
-                               lowercaseUrl.includes('zohoapis.in') ||
-                               lowercaseUrl.includes('amazonaws.com');
+            const isImageHost = lowercaseUrl.includes('amazonaws.com') ||
+                               lowercaseUrl.includes('localhost:3000/uploads') || // NEXUS local uploads
+                               lowercaseUrl.includes('/uploads/blogs/') ||         // NEXUS upload path
+                               lowercaseUrl.includes('/api/image/');              // NEXUS image API
                                
             return hasImageExtension || isImageHost || lowercaseUrl.includes('image');
         } catch (error) {
@@ -579,7 +594,23 @@ class ZohoDataProcessor {
 
     // ⚡ Optimize Image URL (optional - for CDN or resizing)
     optimizeImageUrl(url) {
-        // For now, return as-is, but you can add optimization logic here
+        // Handle NEXUS local uploads
+        if (url.includes('/uploads/blogs/') && !url.startsWith('http')) {
+            // Convert relative paths to full URLs for NEXUS uploads
+            const baseUrl = process.env.NEXUS_BASE_URL || 'http://localhost:3000';
+            return `${baseUrl}${url.startsWith('/') ? '' : '/'}${url}`;
+        }
+        
+        // Handle localhost URLs (make sure they're properly formatted)
+        if (url.includes('localhost:3000/uploads')) {
+            // Ensure protocol is included
+            if (!url.startsWith('http')) {
+                return `http://${url}`;
+            }
+            return url;
+        }
+        
+        // For now, return as-is for other URLs, but you can add optimization logic here
         // Example: Add query parameters for resizing, format conversion, etc.
         
         // Future enhancement: Add CDN optimization
