@@ -1,4 +1,4 @@
-# DummyBackend API
+# NEXUS Backend API
 
 A Node.js backend API built with Fastify framework, providing endpoints for blogs/articles and form submissions. The project follows industry best practices with proper **separation of concerns** and **modular architecture**.
 
@@ -16,23 +16,23 @@ A Node.js backend API built with Fastify framework, providing endpoints for blog
 
 ```
 DummyBackend/
-├── server.js                    # 🎯 Server configuration & startup
+├── nexus-core.js                    # 🎯 Server configuration & startup
 ├── package.json                 # 📦 Dependencies and scripts
 ├── README.md                    # 📖 Project documentation
-├── config/
+├── synapses/
 │   └── server.js               # ⚙️ Environment & server configuration
-├── controllers/
+├── processors/
 │   ├── blogController.js       # 📝 Blog business logic
 │   └── formController.js       # 📋 Form submission logic
-├── models/
+├── memory-banks/
 │   └── blogsData.js           # 💾 Data models & sample data
-├── routes/
+├── pathways/
 │   ├── index.js               # 🛣️ Main route registry
 │   ├── blogRoutes.js          # 🛣️ Blog-related endpoints
 │   └── formRoutes.js          # 🛣️ Form-related endpoints
-├── utils/
+├── toolkit/
 │   └── validation.js          # 🔧 Validation utilities
-└── middleware/                 # 🔒 Custom middleware (ready for expansion)
+└── interceptors/              # 🔒 Custom middleware (ready for expansion)
 ```
 
 ## 📋 API Endpoints
