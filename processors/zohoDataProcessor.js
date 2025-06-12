@@ -7,6 +7,10 @@ class ZohoDataProcessor {
         this.clientId = process.env.ZOHO_CLIENT_ID;
         this.clientSecret = process.env.ZOHO_CLIENT_SECRET;
         this.baseUrl = 'https://www.zohoapis.in/crm/v8';
+        
+        // Configuration for blog fetching
+        this.maxBlogsPerPage = 100; // Maximum blogs to fetch for client-side filtering
+        
         this.modules = {
             // Content modules
             blogs: 'Blog',
@@ -180,15 +184,23 @@ class ZohoDataProcessor {
     // 📖 Fetch Single Blog by Slug
     async getBlogBySlug(slug) {
         try {
-            // Properly encode the criteria for Zoho API
-            const criteria = `Blog_Slug:equals:${encodeURIComponent(slug)}`;
-            const endpoint = `/${this.modules.blogs}?criteria=${encodeURIComponent(criteria)}&fields=Blog_Title,Blog_Slug,Content,Author,Excerpt,Published_Date,Category,Category_Type,Tags,featuredImage,Read_Time_Minutes,Meta_Description,Status`;
+            // FIXED: Get all blogs and filter client-side instead of relying on Zoho criteria search
+            // The Zoho criteria search is unreliable and returns wrong results
+            const endpoint = `/${this.modules.blogs}?fields=Blog_Title,Blog_Slug,Content,Author,Excerpt,Published_Date,Category,Category_Type,Tags,featuredImage,Read_Time_Minutes,Meta_Description,Status&per_page=${this.maxBlogsPerPage}`;
             
             const response = await this.makeZohoRequest(endpoint);
             
             if (response.data && response.data.length > 0) {
-                return this.transformBlogData(response.data[0]);
+                // Client-side exact slug matching
+                const matchingBlog = response.data.find(blog => blog.Blog_Slug === slug);
+                
+                if (matchingBlog) {
+                    return this.transformBlogData(matchingBlog);
+                } else {
+                    return null;
+                }
             }
+            
             return null;
         } catch (error) {
             console.error('❌ Error fetching blog by slug:', error);

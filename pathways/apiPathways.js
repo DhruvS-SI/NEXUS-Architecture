@@ -54,50 +54,94 @@ async function registerApiPathways(nexusCore) {
             let result;
             let contentType = 'all';
             let isSpecific = false;
+            let expectedCategoryType = null;
 
-            // 🔍 Determine content type and operation
+            // 🔍 Validate categoryType filters - Only allow valid ones
+            const validFilters = ['blog', 'case-studies', 'media'];
+            const invalidFilters = Object.keys(request.query).filter(key => 
+                key.endsWith('=true') || (request.query[key] === 'true' && !validFilters.includes(key) && key !== 'query' && key !== 'page' && key !== 'limit')
+            );
+            
+            // Check for invalid filter parameters
+            for (const key of Object.keys(request.query)) {
+                if (request.query[key] === 'true' && key !== 'query' && key !== 'page' && key !== 'limit' && !validFilters.includes(key)) {
+                    return reply.status(400).send({
+                        status: 400,
+                        success: false,
+                        error: `Invalid filter parameter: '${key}'`,
+                        message: `Only these filters are allowed: ${validFilters.join(', ')}`,
+                        validFilters: validFilters,
+                        providedFilter: key,
+                        timestamp: new Date().toISOString()
+                    });
+                }
+            }
+
+            // 🎯 Determine expected categoryType from filters
+            if (blog === 'true') {
+                expectedCategoryType = 'blog';
+                contentType = 'blog';
+            } else if (request.query['case-studies'] === 'true') {
+                expectedCategoryType = 'case-studies';
+                contentType = 'case-studies';
+            } else if (request.query.media === 'true') {
+                expectedCategoryType = 'media';
+                contentType = 'media';
+            } else if (categoryType) {
+                expectedCategoryType = categoryType.toLowerCase();
+                contentType = categoryType.toLowerCase();
+            }
+
+            // 🔍 Handle specific content by slug with categoryType filtering
             if (query) {
-                // Specific content by slug
-                console.log('🔍 Getting specific content by slug:', query);
                 result = await contentProcessor.getBlogBySlug(query);
                 isSpecific = true;
-                contentType = 'specific';
-            } else if (blog === 'true' || categoryType) {
-                // Filtered content by categoryType
-                const filters = { ...request.query };
                 
-                // If blog=true is specified, filter for "blog" categoryType only
-                if (blog === 'true' && !categoryType) {
-                    filters.filterCategoryType = 'blog';
-                    console.log('🔍 Getting blog content only (filtered)');
-                    contentType = 'blogs';
-                } else if (categoryType) {
-                    filters.filterCategoryType = categoryType;
-                    console.log(`🔍 Getting content filtered by categoryType: ${categoryType}`);
-                    contentType = categoryType.toLowerCase();
+                if (result.success && result.data) {
+                    // ✅ Check if content matches expected categoryType
+                    if (expectedCategoryType) {
+                        const actualCategoryType = result.data.categoryType ? result.data.categoryType.toLowerCase() : '';
+                        
+                        if (actualCategoryType !== expectedCategoryType) {
+                            return reply.status(404).send({
+                                status: 404,
+                                success: false,
+                                error: `Content not found in '${expectedCategoryType}' category`,
+                                message: `The content '${query}' exists but is categorized as '${actualCategoryType}', not '${expectedCategoryType}'.`,
+                                actualCategoryType: actualCategoryType,
+                                expectedCategoryType: expectedCategoryType,
+                                contentType: contentType,
+                                isSpecific: true,
+                                timestamp: new Date().toISOString()
+                            });
+                        }
+                    }
+                    
+                    contentType = result.data.categoryType || 'specific';
                 } else {
-                    console.log('🔍 Getting all content from Blog module');
-                    contentType = 'blogs';
+                    // Content not found
+                    return reply.status(404).send({
+                        status: 404,
+                        success: false,
+                        error: 'Content not found',
+                        message: `No content found with slug '${query}'`,
+                        requestedSlug: query,
+                        expectedCategoryType: expectedCategoryType,
+                        contentType: contentType,
+                        isSpecific: true,
+                        timestamp: new Date().toISOString()
+                    });
                 }
+            } 
+            // 🔍 Handle filtered content by categoryType (no specific slug)
+            else if (expectedCategoryType) {
+                const filters = { ...request.query };
+                filters.filterCategoryType = expectedCategoryType;
                 
                 result = await contentProcessor.getBlogs(filters);
-            } else if (request.query['case-studies'] === 'true') {
-                // Case studies filter
-                const filters = { ...request.query };
-                filters.filterCategoryType = 'case-studies';
-                console.log('🔍 Getting case-studies content only (filtered)');
-                contentType = 'case-studies';
-                result = await contentProcessor.getBlogs(filters);
-            } else if (request.query.media === 'true') {
-                // Media filter
-                const filters = { ...request.query };
-                filters.filterCategoryType = 'media';
-                console.log('🔍 Getting media content only (filtered)');
-                contentType = 'media';
-                result = await contentProcessor.getBlogs(filters);
-            } else {
-                // All content (no filters)
-                console.log('🔍 Getting all content from Blog module');
+            } 
+            // 🔍 Handle all content (no filters)
+            else {
                 result = await contentProcessor.getBlogs(request.query);
                 contentType = 'all';
             }
@@ -120,6 +164,14 @@ async function registerApiPathways(nexusCore) {
                     response.pagination = result.pagination;
                 }
 
+                // Add filter info for filtered requests
+                if (expectedCategoryType && !isSpecific) {
+                    response.filter = {
+                        categoryType: expectedCategoryType,
+                        totalResults: result.pagination ? result.pagination.total : (Array.isArray(result.data) ? result.data.length : 0)
+                    };
+                }
+
                 return reply.status(200).send(response);
             } else {
                 return reply.status(result.statusCode || (isSpecific ? 404 : 500)).send({
@@ -128,6 +180,7 @@ async function registerApiPathways(nexusCore) {
                     error: result.error || result.message,
                     contentType: contentType,
                     isSpecific: isSpecific,
+                    expectedCategoryType: expectedCategoryType,
                     timestamp: new Date().toISOString()
                 });
             }
@@ -184,7 +237,6 @@ async function registerApiPathways(nexusCore) {
                 totalContentPerCategory = parsed;
             }
 
-            console.log('🔍 Getting posts from categories:', cat, totalContentPerCategory ? `(${totalContentPerCategory} per category)` : '(all available)');
             const result = await contentProcessor.getMultiplePostsByCategories(cat, totalContentPerCategory);
             
             if (result.success) {
@@ -675,7 +727,6 @@ const submitContactForm = async (formData) => {
         
         if (result.success) {
             // Success: Show confirmation message
-            console.log('✅ Form submitted:', result.data.submissionId);
             showSuccessMessage('Thank you! We\\'ll respond within 24-48 hours. Check your email for confirmation.');
         } else {
             // Error: Show validation errors
