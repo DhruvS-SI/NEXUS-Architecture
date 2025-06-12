@@ -114,13 +114,20 @@ async function registerApiPathways(nexusCore) {
                 cookies_policy_version: cookies_policy_version.toString()
             };
 
-            // Set cookie for 1 year (365 days)
+            // Environment-aware cookie configuration
+            const isProduction = process.env.NODE_ENV === 'production';
+            const isStaging = process.env.NODE_ENV === 'staging';
+            const isDevelopment = process.env.NODE_ENV === 'development' || !process.env.NODE_ENV;
+
+            // Set cookie for 1 year (365 days) with environment-specific options
             const cookieOptions = {
                 maxAge: 365 * 24 * 60 * 60 * 1000, // 1 year in milliseconds
                 httpOnly: false, // Allow frontend JavaScript access
-                secure: false, // Set to true in production with HTTPS
-                sameSite: 'lax', // CSRF protection
-                path: '/' // Available for entire domain
+                secure: isProduction || isStaging, // HTTPS in production/staging, HTTP in development
+                sameSite: isProduction ? 'strict' : 'lax', // Stricter in production
+                path: '/', // Available for entire domain
+                // Domain configuration based on environment
+                ...(process.env.COOKIE_DOMAIN && { domain: process.env.COOKIE_DOMAIN })
             };
 
             // Set the allowCookie cookie
@@ -762,7 +769,7 @@ async function registerApiPathways(nexusCore) {
                     response_codes: [200, 404, 500]
                 },
                 get_posts: {
-                    method: "GET", 
+                    method: "GET",
                     path: "/api/getPosts",
                     description: "🎯 NEW: Get multiple posts from specified categories with optional limit per category",
                     query_params: {
