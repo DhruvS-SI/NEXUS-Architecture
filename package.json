@@ -62,6 +62,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@fastify/cookie": "^9.4.0",
     "@fastify/cors": "^8.5.0",
     "@fastify/formbody": "^7.4.0",
     "@zohocrm/nodejs-sdk-2.0": "^6.1.0",

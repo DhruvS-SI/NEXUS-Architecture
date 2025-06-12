@@ -47,6 +47,178 @@ async function registerApiPathways(nexusCore) {
         }
     });
 
+    nexusCore.post('/api/cookie-consent', async (request, reply) => {
+        try {
+            const { 
+                allowCookie, 
+                ipaddress, 
+                privacy_version, 
+                terms_conditions_version, 
+                cookies_policy_version 
+            } = request.body;
+            
+            // Validate allowCookie parameter
+            if (allowCookie === undefined || allowCookie === null) {
+                return reply.status(400).send({
+                    status: 400,
+                    success: false,
+                    error: 'Missing allowCookie parameter',
+                    message: 'allowCookie parameter is required (0 or 1)',
+                    timestamp: new Date().toISOString()
+                });
+            }
+
+            // Convert to number and validate allowCookie
+            const cookieValue = parseInt(allowCookie);
+            if (cookieValue !== 0 && cookieValue !== 1) {
+                return reply.status(400).send({
+                    status: 400,
+                    success: false,
+                    error: 'Invalid allowCookie value',
+                    message: 'allowCookie must be 0 (deny) or 1 (allow)',
+                    timestamp: new Date().toISOString()
+                });
+            }
+
+            // Validate required configuration fields
+            const requiredFields = {
+                ipaddress,
+                privacy_version,
+                terms_conditions_version,
+                cookies_policy_version
+            };
+
+            const missingFields = [];
+            for (const [key, value] of Object.entries(requiredFields)) {
+                if (value === undefined || value === null || value === '') {
+                    missingFields.push(key);
+                }
+            }
+
+            if (missingFields.length > 0) {
+                return reply.status(400).send({
+                    status: 400,
+                    success: false,
+                    error: 'Missing required fields',
+                    message: `The following fields are required: ${missingFields.join(', ')}`,
+                    missingFields: missingFields,
+                    timestamp: new Date().toISOString()
+                });
+            }
+
+            // Store the configuration from request
+            const consentConfig = {
+                ipaddress: ipaddress.toString(),
+                privacy_version: privacy_version.toString(),
+                terms_conditions_version: terms_conditions_version.toString(),
+                cookies_policy_version: cookies_policy_version.toString()
+            };
+
+            // Set cookie for 1 year (365 days)
+            const cookieOptions = {
+                maxAge: 365 * 24 * 60 * 60 * 1000, // 1 year in milliseconds
+                httpOnly: false, // Allow frontend JavaScript access
+                secure: false, // Set to true in production with HTTPS
+                sameSite: 'lax', // CSRF protection
+                path: '/' // Available for entire domain
+            };
+
+            // Set the allowCookie cookie
+            reply.setCookie('allowCookie', cookieValue.toString(), cookieOptions);
+
+            // Prepare response based on user choice
+            if (cookieValue === 1) {
+                return reply.status(200).send({
+                    status: 200,
+                    success: true,
+                    message: 'Cookie consent granted successfully',
+                    data: {
+                        allowCookie: 1,
+                        action: 'consent_granted',
+                        cookieExpiry: '1 year',
+                        consentConfig: consentConfig
+                    },
+                    timestamp: new Date().toISOString()
+                });
+            } else {
+                return reply.status(200).send({
+                    status: 200,
+                    success: true,
+                    message: 'Cookie consent denied successfully',
+                    data: {
+                        allowCookie: 0,
+                        action: 'consent_denied',
+                        cookieExpiry: '1 year',
+                        consentConfig: consentConfig
+                    },
+                    timestamp: new Date().toISOString()
+                });
+            }
+
+        } catch (error) {
+            console.error('❌ Cookie consent API error:', error);
+            return reply.status(500).send({
+                status: 500,
+                success: false,
+                error: 'Internal server error',
+                message: 'Failed to process cookie consent',
+                timestamp: new Date().toISOString()
+            });
+        }
+    });
+
+    // 🍪 GET COOKIE CONSENT STATUS
+    nexusCore.get('/api/cookie-consent', async (request, reply) => {
+        try {
+            const allowCookie = request.cookies.allowCookie;
+            
+            // Static configuration
+            const staticConfig = {
+                ipaddress: "1",
+                privacy_version: "1",
+                terms_conditions_version: "1", 
+                cookies_policy_version: "1"
+            };
+
+            if (allowCookie === undefined) {
+                return reply.status(200).send({
+                    status: 200,
+                    success: true,
+                    message: 'No cookie consent found',
+                    data: {
+                        allowCookie: null,
+                        action: 'no_consent_set',
+                        staticConfig: staticConfig
+                    },
+                    timestamp: new Date().toISOString()
+                });
+            }
+
+            const cookieValue = parseInt(allowCookie);
+            return reply.status(200).send({
+                status: 200,
+                success: true,
+                message: 'Cookie consent status retrieved',
+                data: {
+                    allowCookie: cookieValue,
+                    action: cookieValue === 1 ? 'consent_granted' : 'consent_denied',
+                    staticConfig: staticConfig
+                },
+                timestamp: new Date().toISOString()
+            });
+
+        } catch (error) {
+            console.error('❌ Get cookie consent status error:', error);
+            return reply.status(500).send({
+                status: 500,
+                success: false,
+                error: 'Internal server error',
+                message: 'Failed to retrieve cookie consent status',
+                timestamp: new Date().toISOString()
+            });
+        }
+    });
+
     // 🎯 UNIFIED CONTENT API - Single endpoint for all content types
     nexusCore.get('/api/content', async (request, reply) => {
         try {

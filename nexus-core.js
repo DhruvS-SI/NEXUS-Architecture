@@ -30,6 +30,10 @@ async function activateNexus() {
   // Register essential middleware
   await nexusCore.register(require('@fastify/cors'), config.cors);
   await nexusCore.register(require('@fastify/formbody'));
+  await nexusCore.register(require('@fastify/cookie'), {
+    secret: process.env.COOKIE_SECRET || 'nexus-cookie-secret-key-change-in-production',
+    parseOptions: {}
+  });
   
   // Welcome route - Show all available endpoints
   nexusCore.get('/', async (request, reply) => {
