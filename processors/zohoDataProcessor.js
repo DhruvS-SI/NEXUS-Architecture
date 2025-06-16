@@ -20,7 +20,7 @@ class ZohoDataProcessor {
             contacts: 'Contacts',        // Contact form → Contacts module
             leads: 'Leads',             // eBook requests → Leads module  
             careers: 'Careers',         // Career applications → Custom Careers module
-            newsletter: 'Newsletter'    // Newsletter → Custom Newsletter module
+            newsletter: 'Newsletters'    // Newsletter → Custom Newsletter module
         };
     }
 
@@ -384,7 +384,7 @@ class ZohoDataProcessor {
                             Last_Name: formData.lastName,
                             Email: formData.email,
                             Company: formData.nameOfOrganisation,
-                            Lead_Source: 'NEXUS eBook Download',
+                            Lead_Source: 'Sportz Interactive eBook Download',
                             Lead_Status: 'Not Contacted',
                             Mailing_Country: formData.country,
                             Description: `eBook Download Request\nOrganisation: ${formData.nameOfOrganisation}\nCountry: ${formData.country}`,
@@ -395,16 +395,20 @@ class ZohoDataProcessor {
 
                 case 'careers':
                     targetModule = this.modules.careers;
+                    // Validate CV size if present
+                    if (formData.cvUpload && formData.cvUpload.size > 10 * 1024 * 1024) { // 10MB in bytes
+                        throw new Error('CV file size exceeds 10MB limit');
+                    }
                     submissionData = {
                         data: [{
                             Full_Name: formData.fullname,
                             Email: formData.emailid,
                             Mobile: formData.mobile,
                             Job_Title: formData.jobTitle,
-                            CV_Upload: formData.cvUpload || 'Pending', // File upload handling needed
-                            Application_Source: 'NEXUS Career Portal',
+                            CV_Upload: formData.cvUpload ? formData.cvUpload.name : 'Pending',
+                            Application_Source: 'Sportz Interactive Career Portal',
                             Application_Status: 'New Application',
-                            Application_Date: new Date().toISOString().split('T')[0]
+                            Application_Date: new Date().toISOString().split('T')[0],
                         }]
                     };
                     break;
@@ -415,7 +419,7 @@ class ZohoDataProcessor {
                         data: [{
                             Email: formData.emailId,
                             Subscription_Date: new Date().toISOString().split('T')[0],
-                            Subscription_Source: 'NEXUS Newsletter',
+                            Subscription_Source: 'Sportz Interactive Newsletter',
                             Status: 'Active'
                         }]
                     };
