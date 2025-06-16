@@ -405,7 +405,6 @@ class ZohoDataProcessor {
                             Email: formData.emailid,
                             Mobile: formData.mobile,
                             Job_Title: formData.jobTitle,
-                            CV_Upload: formData.cvUpload ? formData.cvUpload.name : 'Pending',
                             Application_Source: 'Sportz Interactive Career Portal',
                             Application_Status: 'New Application',
                             Application_Date: new Date().toISOString().split('T')[0],
@@ -429,16 +428,42 @@ class ZohoDataProcessor {
                     throw new Error(`Unknown form type: ${formType}`);
             }
 
+            // Create the record in Zoho CRM
             const response = await this.makeZohoRequest(`/${targetModule}`, {
                 method: 'POST',
                 body: submissionData
             });
 
+            // If a file is present and module is careers, upload as attachment
+            let attachmentResult = null;
+            if (formType === 'careers' && formData.cvUpload && formData.cvUpload.buffer) {
+                const recordId = response.data[0].details.id;
+                const accessToken = this.accessToken;
+                const fetch = require('node-fetch');
+                const FormData = require('form-data');
+                const form = new FormData();
+                form.append('file', formData.cvUpload.buffer, {
+                    filename: formData.cvUpload.filename,
+                    contentType: formData.cvUpload.mimetype
+                });
+                const zohoAttachUrl = `https://www.zohoapis.in/crm/v2/${targetModule}/${recordId}/Attachments`;
+                const attachRes = await fetch(zohoAttachUrl, {
+                    method: 'POST',
+                    headers: {
+                        Authorization: `Zoho-oauthtoken ${accessToken}`
+                    },
+                    body: form
+                });
+                const attachJson = await attachRes.json();
+                attachmentResult = attachJson;
+            }
+
             return {
                 success: true,
                 id: response.data[0].details.id,
-                message: `Form submitted successfully to ${targetModule}`,
-                module: targetModule
+                message: `Form submitted successfully to ${targetModule}` + (attachmentResult ? ' (CV attached)' : ''),
+                module: targetModule,
+                attachment: attachmentResult
             };
         } catch (error) {
             console.error(`❌ Error submitting ${formType} form to Zoho:`, error);

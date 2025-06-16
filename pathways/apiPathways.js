@@ -12,7 +12,30 @@ async function registerApiPathways(nexusCore) {
     // 🎯 UNIFIED FORM SUBMISSION ENDPOINT
     nexusCore.post('/api/submit', async (request, reply) => {
         try {
-            const result = await formsProcessor.processUnifiedForm(request.body);
+            let formData;
+            // Check if the request is multipart (file upload)
+            if (request.isMultipart()) {
+                formData = {};
+                const parts = request.parts();
+                for await (const part of parts) {
+                    if (part.file) {
+                        // Only support one file (cvUpload)
+                        formData.cvUpload = {
+                            filename: part.filename,
+                            mimetype: part.mimetype,
+                            buffer: await part.toBuffer(),
+                            size: part.file.truncated ? part.file.bytesRead : part.file.size
+                        };
+                    } else {
+                        formData[part.fieldname] = part.value;
+                    }
+                }
+            } else {
+                // JSON or urlencoded
+                formData = request.body;
+            }
+
+            const result = await formsProcessor.processUnifiedForm(formData);
             
             if (result.success) {
                 return reply.status(200).send({
