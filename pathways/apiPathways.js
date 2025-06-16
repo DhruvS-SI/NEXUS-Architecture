@@ -19,12 +19,39 @@ async function registerApiPathways(nexusCore) {
                 const parts = request.parts();
                 for await (const part of parts) {
                     if (part.file) {
+                        // Read the file buffer first
+                        const buffer = await part.toBuffer();
+                        const fileSize = buffer.length; // Use actual buffer size
+                        
+                        // Validate file size (10MB limit)
+                        const maxSize = 10 * 1024 * 1024; // 10MB in bytes
+                        if (fileSize > maxSize) {
+                            const fileSizeMB = (fileSize / (1024 * 1024)).toFixed(2);
+                            return reply.status(413).send({
+                                status: 413,
+                                success: false,
+                                error: 'File too large',
+                                message: `CV file size (${fileSizeMB}MB) exceeds the maximum allowed size of 10MB. Please compress your file or use a smaller file.`,
+                                details: {
+                                    uploadedSize: `${fileSizeMB}MB`,
+                                    maxAllowedSize: '10MB',
+                                    suggestions: [
+                                        'Compress your PDF file using online tools',
+                                        'Reduce image quality if CV contains images',
+                                        'Remove unnecessary pages or content',
+                                        'Convert to a more efficient format'
+                                    ]
+                                },
+                                timestamp: new Date().toISOString()
+                            });
+                        }
+                        
                         // Only support one file (cvUpload)
                         formData.cvUpload = {
                             filename: part.filename,
                             mimetype: part.mimetype,
-                            buffer: await part.toBuffer(),
-                            size: part.file.truncated ? part.file.bytesRead : part.file.size
+                            buffer: buffer,
+                            size: fileSize
                         };
                     } else {
                         formData[part.fieldname] = part.value;

@@ -6,7 +6,7 @@ class ZohoDataProcessor {
         this.refreshToken = process.env.ZOHO_REFRESH_TOKEN;
         this.clientId = process.env.ZOHO_CLIENT_ID;
         this.clientSecret = process.env.ZOHO_CLIENT_SECRET;
-        this.baseUrl = 'https://www.zohoapis.in/crm/v8';
+        this.baseUrl = 'https://www.zohoapis.in/crm/v2';
         
         // Configuration for blog fetching
         this.maxBlogsPerPage = 100; // Maximum blogs to fetch for client-side filtering
@@ -19,16 +19,14 @@ class ZohoDataProcessor {
             // Form submission modules - Updated organization
             contacts: 'Contacts',        // Contact form → Contacts module
             leads: 'Leads',             // eBook requests → Leads module  
-            careers: 'Careers',         // Career applications → Custom Careers module
-            newsletter: 'Newsletters'    // Newsletter → Custom Newsletter module
+            careers: 'careers',         // Career applications → Custom Careers module
+            newsletter: 'newsletters'    // Newsletter → Custom Newsletter module
         };
     }
 
     // 🔄 Automatic Token Refresh
     async refreshAccessToken() {
         try {
-            console.log('🔄 Refreshing Zoho access token...');
-            
             const response = await fetch('https://accounts.zoho.in/oauth/v2/token', {
                 method: 'POST',
                 headers: {
@@ -38,10 +36,13 @@ class ZohoDataProcessor {
             });
 
             if (!response.ok) {
-                throw new Error(`Token refresh failed: ${response.status} ${response.statusText}`);
+                const errorText = await response.text();
+                console.error('❌ Token refresh failed with response:', errorText);
+                throw new Error(`Token refresh failed: ${response.status} ${response.statusText} - ${errorText}`);
             }
 
             const data = await response.json();
+            const oldToken = this.accessToken;
             this.accessToken = data.access_token;
             
             // 💾 Update .env file with new token
@@ -71,7 +72,6 @@ class ZohoDataProcessor {
             );
             
             await fs.writeFile(envPath, updatedContent);
-            console.log('💾 Updated .env file with new access token');
         } catch (error) {
             console.error('❌ Failed to update .env file:', error);
             // Don't throw error - token refresh still worked in memory
@@ -96,7 +96,6 @@ class ZohoDataProcessor {
 
             // If 401 Unauthorized, try refreshing token and retry once
             if (response.status === 401) {
-                console.log('🔄 Access token expired, refreshing...');
                 await this.refreshAccessToken();
                 
                 // Retry the request with new token
@@ -121,6 +120,55 @@ class ZohoDataProcessor {
 
             if (!response.ok) {
                 throw new Error(`Zoho API Error: ${response.status} ${response.statusText}`);
+            }
+
+            return await response.json();
+        } catch (error) {
+            throw error;
+        }
+    }
+
+    // 🔄 Zoho File Upload Request Handler with Auto-Refresh
+    async makeZohoFileRequest(endpoint, formData) {
+        try {
+            const url = `https://www.zohoapis.in/crm/v2${endpoint}`;
+            const headers = {
+                'Authorization': `Zoho-oauthtoken ${this.accessToken}`
+                // Note: Content-Type is automatically set by FormData
+            };
+
+            const response = await fetch(url, {
+                method: 'POST',
+                headers,
+                body: formData
+            });
+
+            // If 401 Unauthorized, try refreshing token and retry once
+            if (response.status === 401) {
+                await this.refreshAccessToken();
+                
+                // Retry the request with new token
+                const retryHeaders = {
+                    'Authorization': `Zoho-oauthtoken ${this.accessToken}`
+                };
+
+                const retryResponse = await fetch(url, {
+                    method: 'POST',
+                    headers: retryHeaders,
+                    body: formData
+                });
+
+                if (!retryResponse.ok) {
+                    const errorText = await retryResponse.text();
+                    throw new Error(`Zoho File Upload Error: ${retryResponse.status} ${retryResponse.statusText} - ${errorText}`);
+                }
+
+                return await retryResponse.json();
+            }
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`Zoho File Upload Error: ${response.status} ${response.statusText} - ${errorText}`);
             }
 
             return await response.json();
@@ -395,12 +443,10 @@ class ZohoDataProcessor {
 
                 case 'careers':
                     targetModule = this.modules.careers;
-                    // Validate CV size if present
-                    if (formData.cvUpload && formData.cvUpload.size > 10 * 1024 * 1024) { // 10MB in bytes
-                        throw new Error('CV file size exceeds 10MB limit');
-                    }
+                    // File size validation is now handled in apiPathways.js
                     submissionData = {
                         data: [{
+                            Name: `${formData.fullname} - ${formData.jobTitle} Application`, // Required field
                             Full_Name: formData.fullname,
                             Email: formData.emailid,
                             Mobile: formData.mobile,
@@ -416,6 +462,7 @@ class ZohoDataProcessor {
                     targetModule = this.modules.newsletter;
                     submissionData = {
                         data: [{
+                            Name: `Newsletter Subscription - ${formData.emailId}`, // Required field
                             Email: formData.emailId,
                             Subscription_Date: new Date().toISOString().split('T')[0],
                             Subscription_Source: 'Sportz Interactive Newsletter',
@@ -438,24 +485,15 @@ class ZohoDataProcessor {
             let attachmentResult = null;
             if (formType === 'careers' && formData.cvUpload && formData.cvUpload.buffer) {
                 const recordId = response.data[0].details.id;
-                const accessToken = this.accessToken;
-                const fetch = require('node-fetch');
                 const FormData = require('form-data');
                 const form = new FormData();
                 form.append('file', formData.cvUpload.buffer, {
                     filename: formData.cvUpload.filename,
                     contentType: formData.cvUpload.mimetype
                 });
-                const zohoAttachUrl = `https://www.zohoapis.in/crm/v2/${targetModule}/${recordId}/Attachments`;
-                const attachRes = await fetch(zohoAttachUrl, {
-                    method: 'POST',
-                    headers: {
-                        Authorization: `Zoho-oauthtoken ${accessToken}`
-                    },
-                    body: form
-                });
-                const attachJson = await attachRes.json();
-                attachmentResult = attachJson;
+                
+                // ✅ FIXED: Use makeZohoFileRequest with auto-refresh instead of direct fetch
+                attachmentResult = await this.makeZohoFileRequest(`/${targetModule}/${recordId}/Attachments`, form);
             }
 
             return {
@@ -468,19 +506,66 @@ class ZohoDataProcessor {
         } catch (error) {
             console.error(`❌ Error submitting ${formType} form to Zoho:`, error);
             
+            // Handle file upload specific errors
+            if (error.message && error.message.includes('Zoho File Upload Error')) {
+                return {
+                    success: false,
+                    error: 'File upload failed',
+                    message: 'There was an issue uploading your CV file. Please try again or contact support if the problem persists.',
+                    details: error.message,
+                    statusCode: 503
+                };
+            }
+            
+            // Handle file size errors (though this should be caught earlier now)
+            if (error.message && error.message.includes('file size exceeds')) {
+                return {
+                    success: false,
+                    error: 'File too large',
+                    message: 'Your CV file is too large. Please compress it to under 10MB and try again.',
+                    statusCode: 413
+                };
+            }
+            
+            // Handle missing required fields
+            if (error.message && error.message.includes('MANDATORY_NOT_FOUND')) {
+                return {
+                    success: false,
+                    error: 'Missing required information',
+                    message: 'Some required fields are missing. Please check your form and try again.',
+                    details: error.message,
+                    statusCode: 400
+                };
+            }
+            
+            // Handle token/authentication errors
+            if (error.message && (error.message.includes('401') || error.message.includes('INVALID_TOKEN'))) {
+                return {
+                    success: false,
+                    error: 'Authentication error',
+                    message: 'There was an authentication issue. Please try again in a few moments.',
+                    statusCode: 503
+                };
+            }
+            
             // If it's a 400 Bad Request for custom modules, provide helpful error
             if (error.message && error.message.includes('400 Bad Request') && 
                 (formType === 'careers' || formType === 'newsletters')) {
                 return {
                     success: false,
                     error: `${formType === 'careers' ? 'Careers' : 'Newsletter'} module not created in Zoho CRM yet. Please create the custom module first.`,
-                    moduleRequired: formType === 'careers' ? 'Careers' : 'Newsletter'
+                    moduleRequired: formType === 'careers' ? 'Careers' : 'Newsletter',
+                    statusCode: 503
                 };
             }
             
+            // Generic error handling
             return {
                 success: false,
-                error: error.message
+                error: 'Submission failed',
+                message: 'There was an issue processing your submission. Please try again or contact support.',
+                details: error.message,
+                statusCode: 503
             };
         }
     }
